@@ -18,7 +18,8 @@ YUM=$(command -v yum)
 # Variables
 ECR_URL="public.ecr.aws/moveworks/agent:"
 AGENT_VERSION=""
-NON_ROOT_USERNAME=$(logname)
+LATEST_AGENT_VERSION=2.10.2
+NON_ROOT_USERNAME=""
 AGENT_COUNT=1 # This variable is used to store the number of agents running default 1
 AGENT_TO_BE_STOPPED=0 # This variable is used to store the number of agents to be stopped when upgrading the agent
 AGENT_STOPPED=0 # This variable is used to store the number of agents stopped
@@ -32,6 +33,13 @@ OS_VERSION=""
 IS_UPGRADE=false
 docker="docker"
 podman="podman"
+
+# If NON_ROOT_USERNAME is not set as env variable empty, default it to the whoami
+if [[ -z "$NON_ROOT_USERNAME" ]]; then
+    NON_ROOT_USERNAME=$(whoami)
+fi
+
+echo "Setting up agent with user $NON_ROOT_USERNAME"
 
 if [ ! -d "moveworks" ]; then
   mkdir moveworks || {
@@ -419,7 +427,11 @@ function rename() {
 # helper function to read agent  version
 function read_agent_version() {
     echo "Check latest version from  https://gallery.ecr.aws/moveworks/agent"
-    read -r -p "Enter agent version: " AGENT_VERSION
+    read -r -p "Enter agent version[Press return to choose latest]: " AGENT_VERSION
+    if [ -z "$AGENT_VERSION" ]; then
+        AGENT_VERSION=$LATEST_AGENT_VERSION
+         echo "Choosing Default latest version as $LATEST_AGENT_VERSION"
+    fi
 }
 
 function latest_local_image() {

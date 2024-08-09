@@ -18,7 +18,7 @@ YUM=$(command -v yum)
 # Variables
 ECR_URL="public.ecr.aws/moveworks/agent:"
 AGENT_VERSION=""
-LATEST_AGENT_VERSION=2.10.2
+LATEST_AGENT_VERSION=2.10.3
 NON_ROOT_USERNAME=""
 AGENT_COUNT=1 # This variable is used to store the number of agents running default 1
 AGENT_TO_BE_STOPPED=0 # This variable is used to store the number of agents to be stopped when upgrading the agent

@@ -13,9 +13,13 @@ TEE=$(command -v tee)
 MV=$(command -v mv)
 APTGET=$(command -v apt-get)
 YUM=$(command -v yum)
-
+CRONTAB=$(command -v crontab)
+SHA256SUM=$(command -v sha256sum)
+CHMOD=$(command -v chmod)
+SLEEP=$(command -v sleep)
 
 # Variables
+RELEASE_VERSION="1.0.2"
 ECR_URL="public.ecr.aws/moveworks/agent:"
 AGENT_VERSION=""
 LATEST_AGENT_VERSION=2.10.3
@@ -31,6 +35,9 @@ PODMAN_VERSION=3.4.4
 SYSTEM_TYPE=""
 OS_VERSION=""
 IS_UPGRADE=false
+AGENT_MANAGER_LOG_FILE="moveworks.agent_manager.log"
+AGENT_MANAGER_DOWNLOAD_URL="https://github.com/moveworks/moveworks-agent/releases/download/${RELEASE_VERSION}/agent-manager"
+AGENT_MANAGER_EXPECTED_HASH="688c7be1c064cd1e1e821c252bd3bd4b2416d28b438ce62493a937d800ea7cc3"  #pragma: allowlist secret` comment
 docker="docker"
 podman="podman"
 
@@ -241,7 +248,7 @@ function printErr() {
 
 ## check if required binaries are installed, else prompted to install
 commands=("systemctl" "curl" "openssl"
-          "loginctl" "rm" "sudo" "tee" "mv" )
+          "loginctl" "rm" "sudo" "tee" "mv" "crontab" "sha256sum" "chmod" )
 
 for cmd in "${commands[@]}"; do
   if ! [ -x "$(command -v "$cmd")" ]; then
@@ -994,6 +1001,54 @@ function stop() {
     fi
 }
 
+function setup_agent_manager(){
+  echo "Downloading agent-manager from $AGENT_MANAGER_DOWNLOAD_URL"
+  $CURL -L "$AGENT_MANAGER_DOWNLOAD_URL" -o "${AGENT_DIR}/agent-manager" || { echo "Failed to download with curl."; exit 1; }
+
+  # Verify the SHA-256 hash of the downloaded file
+  echo "Verifying the hash of the downloaded agent-manager..."
+  downloaded_hash=$( $SHA256SUM "${AGENT_DIR}/agent-manager" | awk '{ print $1 }')
+  if [ "$downloaded_hash" != "$AGENT_MANAGER_EXPECTED_HASH" ]; then
+    echo "Hash verification failed."
+    exit 1
+  fi
+  echo "Hash verification successful."
+
+  # Make sure agent-manager is executable
+  $CHMOD +x "${AGENT_DIR}/agent-manager"
+
+  if [ "$CONTAINER_RUNTIME" == "none" ]; then
+    echo "No container runtime found. Please install docker or podman."
+    exit 1
+  fi
+
+  # Setup DBUS_SESSION_BUS_ADDRESS in the command only if runtime is podman and user is non root
+  if [ "$CONTAINER_RUNTIME" == "podman" ] && [ "$NON_ROOT_USERNAME" != "root" ]; then
+    dbus_env="DBUS_SESSION_BUS_ADDRESS=${DBUS_SESSION_BUS_ADDRESS}"
+  else
+    dbus_env=""
+  fi
+
+ # Generate a random number between 0 and 5 for the cron schedule
+  random_minute_start=$(( RANDOM % 5 ))
+  cron_command="${dbus_env} $SLEEP $((RANDOM % 60)) && ${AGENT_DIR}/agent-manager --base_dir=${AGENT_DIR} --container_runtime=${CONTAINER_RUNTIME} --logtostderr >> ${AGENT_DIR}/logs/${AGENT_MANAGER_LOG_FILE} 2>&1"
+  cron_job="${random_minute_start}-59/5 * * * * ${cron_command}"
+
+  # Write to temporary file
+  echo "$cron_job" > my_cron.tmp
+
+  # Load existing crontab entries (minus our script if it was previously added), add the new entry, and reload the crontab
+  if ! ($CRONTAB -l | grep -v 'agent-manager --base_dir'; cat my_cron.tmp) | $CRONTAB -; then
+      echo "Failed to update crontab. Please check your permissions."
+      $RM -f my_cron.tmp
+      exit 1
+  fi
+
+  # Cleanup
+  $RM my_cron.tmp
+  echo "Cron job set up successfully."
+}
+
 # Check if an argument is provided
 if [ -z "$1" ]; then
     echo "Missing argument."
@@ -1059,6 +1114,10 @@ while [[ $# -gt 0 ]]; do
         -d|--debug)
             LOG_LEVEL="${DEBUG_LEVEL}"
             start_agent "$2"
+            exit 0
+            ;;
+        --setup_agent_manager)
+            setup_agent_manager
             exit 0
             ;;
         *)

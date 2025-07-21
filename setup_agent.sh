@@ -19,10 +19,10 @@ CHMOD=$(command -v chmod)
 SLEEP=$(command -v sleep)
 
 # Variables
-RELEASE_VERSION="1.0.2"
+RELEASE_VERSION="1.0.3"
 ECR_URL="public.ecr.aws/moveworks/agent:"
 AGENT_VERSION=""
-LATEST_AGENT_VERSION=2.10.3
+LATEST_AGENT_VERSION=2.10.4
 NON_ROOT_USERNAME=""
 AGENT_COUNT=1 # This variable is used to store the number of agents running default 1
 AGENT_TO_BE_STOPPED=0 # This variable is used to store the number of agents to be stopped when upgrading the agent
@@ -82,6 +82,14 @@ function set_configure_options() {
     readonly PODMAN_CONFIGURE_AGENT="$PODMAN $CONFIGURE_PODMAN_OPTIONS"
     readonly DOCKER_CONFIGURE_AGENT="$DOCKER $CONFIGURE_AGENT_COMMON_OPTIONS"
 }
+
+function set_re_configure_options() {
+    readonly RE_CONFIGURE_AGENT_COMMON_OPTIONS="run --rm -ti -e MODE=reconfigure -v ${AGENT_DIR}/conf:${IMAGE_DIR}/conf -v ${AGENT_DIR}/certs:${IMAGE_DIR}/certs -v ${AGENT_DIR}:${IMAGE_DIR}/scripts "
+    readonly RE_CONFIGURE_PODMAN_OPTIONS="run -u 0 --privileged --rm -ti -e MODE=reconfigure -v ${AGENT_DIR}/conf:${IMAGE_DIR}/conf -v ${AGENT_DIR}/certs:${IMAGE_DIR}/certs -v ${AGENT_DIR}:${IMAGE_DIR}/scripts "
+
+    readonly PODMAN_RE_CONFIGURE_AGENT="$PODMAN $RE_CONFIGURE_PODMAN_OPTIONS"
+    readonly DOCKER_RE_CONFIGURE_AGENT="$DOCKER $RE_CONFIGURE_AGENT_COMMON_OPTIONS"
+}
 # Function to display usage documentation
 function show_usage() {
     echo "Description: Helper script to setup, start and stop the moveworks agent."
@@ -98,6 +106,7 @@ function show_usage() {
     echo "  -v, --validate        Validate the agent machine setup."
     echo "  -f, --fetch           Fetch LDAP certificate. This requires openssl and sudo permissions"
     echo "  -d, --debug           Start the agent in debug mode, optional arguments: --host-network or --fips, if not provided agent is started with default options."
+    echo "  -r. --reconfigure     Starts Agent Configurator in reconfigure mode."
 }
 
 # Function to check the container runtime
@@ -228,6 +237,18 @@ function configure() {
        $PODMAN_CONFIGURE_AGENT $MOVEWORKS_IMAGE
     fi
 
+}
+
+function re_configure() {
+    set_re_configure_options
+    if [ "$CONTAINER_RUNTIME" == "none" ]; then
+        printErr "No container runtime found. Please install docker or podman."
+        exit 1
+    elif [ "$CONTAINER_RUNTIME" == "$docker" ]; then
+        $DOCKER_RE_CONFIGURE_AGENT $MOVEWORKS_IMAGE
+    elif [ "$CONTAINER_RUNTIME" == "$podman" ]; then
+       $PODMAN_RE_CONFIGURE_AGENT $MOVEWORKS_IMAGE
+    fi
 }
 
 # set COMMON_OPTIONS based log level
@@ -802,7 +823,15 @@ function start_agent() {
          configure
          ;;
        [Nn]* )
-         echo "Proceeding with existing configuration."
+         read -r -p "Do you want to edit the existing config file? [y/n]: " edit_config
+         case $edit_config in
+           [Yy]* )
+             re_configure
+             ;;
+           [Nn]* )
+             echo "Proceeding with existing configuration."
+             ;;
+          esac
          ;;
        esac
    else
@@ -1088,6 +1117,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         -c|--configure)
             configure
+            exit 0
+            ;;
+        -r|--reconfigure)
+            re_configure
             exit 0
             ;;
         -s|--start)

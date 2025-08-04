@@ -37,7 +37,7 @@ OS_VERSION=""
 IS_UPGRADE=false
 AGENT_MANAGER_LOG_FILE="moveworks.agent_manager.log"
 AGENT_MANAGER_DOWNLOAD_URL="https://github.com/moveworks/moveworks-agent/releases/download/${RELEASE_VERSION}/agent-manager"
-AGENT_MANAGER_EXPECTED_HASH="688c7be1c064cd1e1e821c252bd3bd4b2416d28b438ce62493a937d800ea7cc3"  #pragma: allowlist secret` comment
+AGENT_MANAGER_EXPECTED_HASH="6eb0d480af660d60aeed2260c3a7fdcaae5c943156e2a3830a6fc9a5a9eb0a41"  #pragma: allowlist secret` comment
 docker="docker"
 podman="podman"
 
@@ -100,13 +100,14 @@ function show_usage() {
     echo "  -h, --help            Display this usage documentation."
     echo "  -i, --init            Initialize the agent. This should be run once during the initial setup of the agent."
     echo "  -c, --configure       Configure the agent. This should be run after the agent is initialized and before starting the agent."
+    echo "  -r, --reconfigure     Starts Agent Configurator in reconfigure mode."
     echo "  -s, --start           Start the agent, optional arguments: --host-network or --fips, if not provided agent is started with default options."
     echo "  -t, --stop            Stop all running agents."
     echo "  -p, --permissions     Fix user permissions of agent folder. This should be executed with sudo permissions."
     echo "  -v, --validate        Validate the agent machine setup."
     echo "  -f, --fetch           Fetch LDAP certificate. This requires openssl and sudo permissions"
     echo "  -d, --debug           Start the agent in debug mode, optional arguments: --host-network or --fips, if not provided agent is started with default options."
-    echo "  -r. --reconfigure     Starts Agent Configurator in reconfigure mode."
+    echo "  --setup_agent_manager Sets Up Agent Manager, which is used to manage agent through self serve"
 }
 
 # Function to check the container runtime
